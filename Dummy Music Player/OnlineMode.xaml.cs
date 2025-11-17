@@ -1,5 +1,4 @@
-﻿// FILE: OnlineMode.xaml.cs
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq; // <-- ADDED FOR SHUFFLE
 using System.Windows;
@@ -16,10 +15,16 @@ namespace Dummy_Music_Player
 
     public partial class OnlineMode : System.Windows.Controls.UserControl
     {
+
+        private string _jamendoClientId;
+        private string _theAudioDbApiKey;
+        private bool _keysInitialized = false;
+
+
         private IWavePlayer waveOut;
         private MediaFoundationReader audioFileReader;
 
-        private readonly JamendoService jamendoService;
+        private JamendoService jamendoService;
 
         // (MODIFIED) We now need two lists for shuffling
         private List<JamendoTrack> searchResults = new List<JamendoTrack>(); // This list will be shuffled
@@ -45,7 +50,6 @@ namespace Dummy_Music_Player
         public OnlineMode()
         {
             InitializeComponent();
-            jamendoService = new JamendoService();
             waveOut = new WaveOutEvent();
             waveOut.PlaybackStopped += OnPlaybackStopped;
 
@@ -64,6 +68,20 @@ namespace Dummy_Music_Player
             SearchBox.Text = "Search for music...";
             SearchBox.Foreground = Brushes.Gray;
             isSearchPlaceholder = true;
+        }
+
+        /// Receives API keys from the MainWindow.
+        public void InitializeApiKeys(string jamendoId, string audioDbKey)
+        {
+            if (_keysInitialized) return; // Only run once
+
+            _jamendoClientId = jamendoId;
+            _theAudioDbApiKey = audioDbKey;
+
+            // Now that we have the key, initialize the service
+            jamendoService = new JamendoService(_jamendoClientId);
+
+            _keysInitialized = true;
         }
 
         // (MODIFIED) This event now handles Repeat logic

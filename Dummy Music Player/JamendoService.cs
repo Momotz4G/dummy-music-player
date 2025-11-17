@@ -39,16 +39,19 @@ public class JamendoTrack
 }
 
 
-// --- The Service Class ---
 public class JamendoService
 {
     private readonly HttpClient _client = new HttpClient();
 
-    // =========================================================
-    // !!! PASTE YOUR JAMENDO client_id HERE !!!
-    // =========================================================
-    private readonly string _clientId = "94b0e3c3";
+
+    //  YOUR JAMENDO client_id HERE !!!
+    private string _clientId;
     private readonly string _baseUrl = "https://api.jamendo.com/v3.0";
+
+    public JamendoService(string clientId)
+    {
+        _clientId = clientId;
+    }
 
     /// <summary>
     /// Searches for tracks on Jamendo.

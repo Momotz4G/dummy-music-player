@@ -291,8 +291,10 @@ namespace Dummy_Music_Player
 
     public partial class MainWindow : Window
     {
+
+        private static AppSecrets _secrets;
+
         // PASTE YOUR LAST.FM API KEY HERE
-        private const string LASTFM_API_KEY = "b88fcdcccf57316db5464b914d8afdd4";
 
         private static readonly HttpClient httpClient = new HttpClient();
 
@@ -398,11 +400,24 @@ namespace Dummy_Music_Player
         {
             InitializeComponent();
 
+            try
+            {
+                string json = System.IO.File.ReadAllText("secrets.json");
+                _secrets = JsonSerializer.Deserialize<AppSecrets>(json);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"FATAL ERROR: Could not load 'secrets.json'.\n\nAPI features will be disabled.\n\nError: {ex.Message}", "Secrets File Missing", MessageBoxButton.OK, MessageBoxImage.Error);
+                // Close the app if secrets are essential
+                // Application.Current.Shutdown(); 
+                // Or just continue with online features disabled
+            }
+
             this.SourceInitialized += new EventHandler(OnSourceInitialized);
 
             mediaPlayer.MediaOpened += MediaPlayer_MediaOpened;
 
-            client = new DiscordRpcClient("1436651511974203393");
+            client = new DiscordRpcClient(_secrets?.DiscordAppId ?? "1436651511974203393");
 
             // (Optional: Set up logging)
             client.Logger = new ConsoleLogger() { Level = LogLevel.Warning };
@@ -2217,20 +2232,21 @@ namespace Dummy_Music_Player
             try
             {
                 // --- STEP 2: Get all local data we can use (WITH .Trim()) ---
-                string artistName = artist.ArtistName.Trim();
+                string artistName = CleanArtistNameForApi(artist.ArtistName.Trim());
                 string firstSongTitle = artist.Albums?.FirstOrDefault()?.Songs?.FirstOrDefault()?.Title?.Trim();
                 string firstAlbumTitle = artist.Albums?.FirstOrDefault()?.AlbumTitle?.Trim();
 
                 string foundArtistId = null; // This is our goal!
-
+                string apiKey = _secrets?.TheAudioDbApiKey ?? "2"; // Use "2" as a fallback if load failed
                 // --- STEP 3: Start the 3-step search ---
-
+                
                 // 1. Try searching by Artist + Album (Most Accurate)
                 if (!string.IsNullOrEmpty(firstAlbumTitle) && firstAlbumTitle != "Unknown Album")
                 {
                     string artistEncoded = WebUtility.UrlEncode(artistName);
                     string albumEncoded = WebUtility.UrlEncode(firstAlbumTitle);
-                    string url_albumSearch = $"https://www.theaudiodb.com/api/v1/json/2/searchalbum.php?s={artistEncoded}&a={albumEncoded}";
+                    
+                    string url_albumSearch = $"https://www.theaudiodb.com/api/v1/json/{apiKey}/searchalbum.php?s={artistEncoded}&a={albumEncoded}";
 
                     HttpResponseMessage albumResponse = await httpClient.GetAsync(url_albumSearch);
                     if (albumResponse.IsSuccessStatusCode)
@@ -2248,7 +2264,7 @@ namespace Dummy_Music_Player
                 {
                     string artistEncoded = WebUtility.UrlEncode(artistName);
                     string songEncoded = WebUtility.UrlEncode(firstSongTitle);
-                    string url_trackSearch = $"https://www.theaudiodb.com/api/v1/json/2/searcht.php?s={artistEncoded}&t={songEncoded}";
+                    string url_trackSearch = $"https://www.theaudiodb.com/api/v1/json/{apiKey}/searcht.php?s={artistEncoded}&t={songEncoded}";
 
                     HttpResponseMessage trackResponse = await httpClient.GetAsync(url_trackSearch);
                     if (trackResponse.IsSuccessStatusCode)
@@ -2270,7 +2286,7 @@ namespace Dummy_Music_Player
                 {
                     // PATH A (SUCCESS): We found a reliable Artist ID.
                     // Now we can get the correct artist bio and image.
-                    string url_artistLookup = $"https://www.theaudiodb.com/api/v1/json/2/artist.php?i={foundArtistId}";
+                    string url_artistLookup = $"https://www.theaudiodb.com/api/v1/json/{apiKey}/artist.php?i={foundArtistId}";
                     HttpResponseMessage artistResponse = await httpClient.GetAsync(url_artistLookup);
                     if (artistResponse.IsSuccessStatusCode)
                     {
@@ -2284,7 +2300,7 @@ namespace Dummy_Music_Player
                     // PATH B (FALLBACK): Both searches failed.
                     // We'll just search by artist name and hope for the best.
                     string artistEncoded = WebUtility.UrlEncode(artistName);
-                    string url_artistSearch = $"https://www.theaudiodb.com/api/v1/json/2/search.php?s={artistEncoded}";
+                    string url_artistSearch = $"https://www.theaudiodb.com/api/v1/json/{apiKey}/search.php?s={artistEncoded}";
 
                     HttpResponseMessage artistResponse = await httpClient.GetAsync(url_artistSearch);
                     if (artistResponse.IsSuccessStatusCode)
@@ -2465,14 +2481,20 @@ namespace Dummy_Music_Player
             OfflineContentGrid.Visibility = Visibility.Collapsed;
             OfflineViewSwitcherPanel.Visibility = Visibility.Collapsed;
 
-            // 3. Show Online UI
+            // 3. Initialize the online control with our loaded API keys
+            if (_secrets != null)
+            {
+                OnlineContentGrid.InitializeApiKeys(_secrets.JamendoClientId, _secrets.TheAudioDbApiKey);
+            }
+
+            // 4. Show Online UI
             OnlineContentGrid.Visibility = Visibility.Visible;
 
-            // 4. Update button "active" state
+            // 5. Update button "active" state
             OfflineModeButton.IsEnabled = true;
             OnlineModeButton.IsEnabled = false;
 
-            // 5. Pause the *other* player (your main, offline one)
+            // 6. Pause the *other* player (your main, offline one)
             mediaPlayer.Pause();
             PlayButton.Content = "▶";
             PlayButton.ToolTip = "Play (Space)";
@@ -2605,4 +2627,13 @@ private void CloseLyricsButton_Click(object sender, RoutedEventArgs e)
 }
 
     }
+
+    public class AppSecrets
+    {
+        public string LastFmApiKey { get; set; }
+        public string DiscordAppId { get; set; }
+        public string JamendoClientId { get; set; }
+        public string TheAudioDbApiKey { get; set; }
+    }
+
 }
